@@ -14,6 +14,14 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
+function askNumber() {
+  return new Promise((resolve) => {
+    rl.question("Enter WhatsApp number (with country code): ", (num) => {
+      resolve(num);
+    });
+  });
+}
+
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("auth");
   const { version } = await fetchLatestBaileysVersion();
@@ -27,18 +35,32 @@ async function startBot() {
 
   sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("connection.update", ({ connection }) => {
+  sock.ev.on("connection.update", async (update) => {
+    const { connection } = update;
+
     if (connection === "open") {
       console.log("✅ BOT CONNECTED");
     }
+
+    if (connection === "close") {
+      console.log("❌ Connection closed");
+    }
   });
 
-  if (!sock.authState.creds.registered) {
-    rl.question("Enter WhatsApp number (with country code): ", async (num) => {
-      const code = await sock.requestPairingCode(num);
-      console.log("\nPAIR CODE:", code, "\n");
-    });
-  }
+  // 🔥 WAIT FOR SOCKET READY BEFORE PAIRING
+  setTimeout(async () => {
+    try {
+      if (!sock.authState.creds.registered) {
+        const num = await askNumber();
+        const code = await sock.requestPairingCode(num);
+        console.log("\n==================");
+        console.log("PAIR CODE:", code);
+        console.log("==================\n");
+      }
+    } catch (err) {
+      console.log("Pairing error:", err.message);
+    }
+  }, 3000);
 
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
@@ -58,9 +80,9 @@ async function startBot() {
       await sock.sendMessage(from, { text: "✅ Bot is working!" });
     }
 
-    // SIMPLE AI PLACEHOLDER
+    // SIMPLE RESPONSE
     if (text.toLowerCase() === "hi") {
-      await sock.sendMessage(from, { text: "Hello 👋 I am your bot!" });
+      await sock.sendMessage(from, { text: "👋 Hello! I am your bot." });
     }
   });
 }
